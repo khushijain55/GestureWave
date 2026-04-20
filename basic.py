@@ -119,7 +119,7 @@ def detect_gesture(frame, landmark_list, processed):
 def main():
     global recording, out
     draw = mp.solutions.drawing_utils
-    cap = cv2.VideoCapture(1)
+    cap = cv2.VideoCapture(0)
     try:
         while cap.isOpened():
             ret, frame = cap.read()

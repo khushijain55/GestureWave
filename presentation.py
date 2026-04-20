@@ -8,7 +8,7 @@ width, height = 1280, 720
 folderPath = "Presentation"
 
 # Camera setup
-cap = cv2.VideoCapture(1)
+cap = cv2.VideoCapture(0)
 cap.set(3, width)
 cap.set(4, height)
 

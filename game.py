@@ -53,7 +53,7 @@ mp_draw = mp.solutions.drawing_utils
 mp_hand = mp.solutions.hands
 
 tip_ids = [4, 8, 12, 16, 20]  # Finger tip IDs
-video = cv2.VideoCapture(1)  # Adjust to the correct camera index
+video = cv2.VideoCapture(0)  # Adjust to the correct camera index
 
 time.sleep(2.0)  # Delay to let the camera initialize
 

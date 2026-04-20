@@ -58,7 +58,7 @@ def start_virtual_keyboard():
             keys.append(Key(start_x + 750, start_y + 4 * (key_height + row_spacing), key_width, key_height, "clr"))
 
     # Initialize webcam and hand tracker
-    cap = cv2.VideoCapture(1)
+    cap = cv2.VideoCapture(0)
 
     if not cap.isOpened():
         print("Error: Unable to access the webcam.")

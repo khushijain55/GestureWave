@@ -4,6 +4,7 @@ import pyttsx3
 import speech_recognition as sr
 import keyboard
 import pyautogui
+import time
 from datetime import datetime
 from googletrans import Translator, LANGUAGES
 import wikipedia
@@ -11,21 +12,27 @@ import psutil
 from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 from comtypes import CLSCTX_ALL
 
-# Initialize voice engine
-engine = pyttsx3.init()
-engine.setProperty('rate', 150)
-engine.setProperty('volume', 1)
-
-# Initialize translator
 translator = Translator()
 
-# Function to speak text
+# ✅ FINAL STABLE SPEAK FUNCTION
 def speak(text):
-    print(f"Assistant: {text}")
-    engine.say(text)
-    engine.runAndWait()
+    try:
+        print(f"Assistant: {text}")
+        time.sleep(0.2)  # small delay (VERY IMPORTANT)
 
-# Function to listen and recognize speech
+        engine = pyttsx3.init('sapi5')   # fresh engine every time
+        engine.setProperty('rate', 150)
+        engine.setProperty('volume', 1)
+
+        engine.say(text)
+        engine.runAndWait()
+        engine.stop()
+
+    except Exception as e:
+        print("Speech Error:", e)
+
+
+# 🎤 Listen
 def listen():
     recognizer = sr.Recognizer()
     with sr.Microphone() as source:
@@ -33,217 +40,167 @@ def listen():
             print("\n🎤 Listening...")
             recognizer.adjust_for_ambient_noise(source)
             audio = recognizer.listen(source, timeout=5)
-            
+
             print("🔍 Recognizing...")
             command = recognizer.recognize_google(audio).lower()
             print(f"✅ Recognized: {command}")
             return command
-        
-        except sr.UnknownValueError:
-            print("⚠ Could not understand the audio")
-            return None
-        except sr.RequestError:
-            print("⚠ Speech recognition service unavailable")
-            return None
-        except Exception as e:
-            print(f"⚠ Microphone error: {e}")
+
+        except:
             return None
 
-# Function to list available languages for translation
-def list_languages():
-    speak("Here are the supported languages for translation:")
-    for code, language in LANGUAGES.items():
-        print(f"{language.capitalize()} ({code})")
-    speak("Check the console for the full list of languages.")
 
-# Function to translate and speak translation
+# ✅ CLEAN QUERY
+def clean_query(query):
+    remove_words = ["what", "is", "who", "tell", "me", "about", "please", "define"]
+    return " ".join([word for word in query.split() if word not in remove_words])
+
+
+# 📚 IMPROVED WIKIPEDIA
+def search_wikipedia(query):
+    clean = clean_query(query)
+
+    if not clean:
+        speak("Please say something meaningful")
+        return
+
+    speak(f"Searching for {clean}")
+
+    try:
+        result = wikipedia.summary(clean, sentences=2)
+        speak(result)
+        webbrowser.open(f"https://en.wikipedia.org/wiki/{clean.replace(' ', '_')}")
+
+    except wikipedia.DisambiguationError as e:
+        try:
+            result = wikipedia.summary(e.options[0], sentences=2)
+            speak(result)
+        except:
+            speak("Could not find correct result")
+
+    except wikipedia.PageError:
+        speak("No result found")
+
+    except:
+        speak("Error in searching")
+
+
+# 🌐 Translation
 def voice_translate():
-    list_languages()  # List supported languages
-    speak("Which language do you want to translate to?")
+    speak("Which language?")
     target_language = listen()
 
     if not target_language:
         return
 
-    # Get language code from the LANGUAGES dictionary
-    lang_code = next((code for code, name in LANGUAGES.items() if name.lower() == target_language), None)
+    lang_code = next((code for code, name in LANGUAGES.items()
+                      if name.lower() == target_language), None)
 
     if not lang_code:
-        speak("Sorry, I couldn't find that language. Please try again.")
+        speak("Language not found")
         return
 
-    speak(f"Okay, translating to {target_language}. Please speak now.")
+    speak("Speak now")
 
     recognizer = sr.Recognizer()
     with sr.Microphone() as source:
-        print("🎤 Speak now:")
         try:
             audio = recognizer.listen(source, timeout=5)
             text = recognizer.recognize_google(audio)
-            print(f"🔊 You said: {text}")
 
-            # Translate text
-            translated_text = translator.translate(text, dest=lang_code)
-            translated_output = translated_text.text
-            print(f"🌐 Translated: {translated_output}")
+            translated = translator.translate(text, dest=lang_code).text
+            speak(translated)
 
-            # Speak the translated text
-            speak(f"The translation is: {translated_output}")
+        except:
+            speak("Error in translation")
 
-        except Exception as e:
-            speak(f"An error occurred: {e}")
 
-# Function to search Wikipedia
-def search_wikipedia(query):
-    speak(f"Searching Wikipedia for {query}...")
-    try:
-        result = wikipedia.summary(query, sentences=2)
-        speak(f"According to Wikipedia, {result}")
-        webbrowser.open(f"https://en.wikipedia.org/wiki/{query.replace(' ', '_')}")
-    except wikipedia.DisambiguationError as e:
-        speak(f"The query is ambiguous. Did you mean: {', '.join(e.options[:3])}?")
-    except wikipedia.PageError:
-        speak("The page does not exist.")
-    except Exception as e:
-        speak(f"An error occurred: {e}")
+# ▶️ YouTube
+def play_youtube_video(query):
+    speak(f"Playing {query} on YouTube")
+    webbrowser.open(f"https://www.youtube.com/results?search_query={query}")
 
-# Function to open modes
-def open_mode(mode_name, url):
-    speak(f"Opening {mode_name}...")
-    webbrowser.open(url)
 
-# Function to tell a joke
-def tell_joke():
-    jokes = [
-        "Why don't skeletons fight each other? They don't have the guts.",
-        "I told my wife she was drawing her eyebrows too high. She looked surprised.",
-        "Why did the scarecrow win an award? Because he was outstanding in his field!"
-    ]
-    speak(random.choice(jokes))
-
-# Function to check battery status
-def get_battery_status():
-    battery = psutil.sensors_battery()
-    if battery:
-        speak(f"The battery is currently at {battery.percent} percent.")
-    else:
-        speak("Battery information is not available.")
-
-# Function to control system volume
+# 🔊 Volume
 def set_volume(level):
     try:
-        level = max(0, min(level, 100))  # Ensure valid range
+        level = max(0, min(level, 100))
         devices = AudioUtilities.GetSpeakers()
         interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
         volume = interface.QueryInterface(IAudioEndpointVolume)
         volume.SetMasterVolumeLevelScalar(level / 100, None)
-        speak(f"Volume set to {level} percent.")
-    except Exception:
-        speak("Unable to adjust volume. Please check your audio settings.")
+        speak(f"Volume set to {level} percent")
+    except:
+        speak("Volume control failed")
 
-def play_youtube_video(query):
-    speak(f"Searching YouTube for {query}")
-    search_url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
-    webbrowser.open(search_url)
 
-# YouTube video control functions
-def play_pause_video():
-    pyautogui.press('k')
-    speak("Toggled play and pause.")
+# 😂 Joke
+def tell_joke():
+    speak(random.choice([
+        "Why don't skeletons fight? They don't have the guts.",
+        "I told my wife she was drawing her eyebrows too high. She looked surprised.",
+        "Why did the scarecrow win? Because he was outstanding!"
+    ]))
 
-def next_10_sec():
-    pyautogui.press('l')
-    speak("Forwarded 10 seconds.")
 
-def previous_10_sec():
-    pyautogui.press('j')
-    speak("Rewinded 10 seconds.")
+# 🔋 Battery
+def get_battery_status():
+    battery = psutil.sensors_battery()
+    if battery:
+        speak(f"Battery is {battery.percent} percent")
+    else:
+        speak("Battery info not available")
 
-def mute_video():
-    pyautogui.press('m')
-    speak("Muted or unmuted the video.")
 
-def fullscreen_video():
-    pyautogui.press('f')
-    speak("Toggled fullscreen mode.")
-
-def volume_up_video():
-    pyautogui.press('up')
-    speak("Increased volume.")
-
-def volume_down_video():
-    pyautogui.press('down')
-    speak("Decreased volume.")
-
-# Main function
+# 🧠 MAIN
 def main():
     speak("Hello! How can I assist you today?")
-    
+
     while True:
-        if keyboard.is_pressed('q'):  # Press 'q' to quit
-            speak("Goodbye! Have a great day.")
+        if keyboard.is_pressed('q'):
+            speak("Goodbye!")
             break
 
-        print("\n⏳ Waiting for a command...")
+        print("\nWaiting for command...")
         command = listen()
 
         if command:
-            print(f"🎯 Processing Command: {command}")  # Debugging output
+            print("Processing:", command)
 
-            if "wikipedia" in command:
-                search_wikipedia(command.replace("wikipedia", "").strip())
-            elif "play" in command and "on youtube" in command:
-                # Extract video name
-                video_query = command.replace("play", "").replace("on youtube", "").strip()
-                if video_query:
-                    play_youtube_video(video_query)
-                else:
-                    speak("Please say the name of the video you want to play on YouTube.")
-            elif "pause video" in command or "play video" in command:
-                play_pause_video()
-            elif "forward" in command or "next 10 seconds" in command:
-                next_10_sec()
-            elif "rewind" in command or "previous 10 seconds" in command:
-                previous_10_sec()
-            elif "mute" in command:
-                mute_video()
-            elif "fullscreen" in command:
-                fullscreen_video()
-            elif "increase volume" in command or "volume up" in command:
-                volume_up_video()
-            elif "decrease volume" in command or "volume down" in command:
-                volume_down_video()
-            elif "open presentation mode" in command:
-                open_mode("Presentation Mode", "http://127.0.0.1:5000/presentation_mode")
-            elif "open gaming mode" in command:
-                open_mode("Gaming Mode", "http://127.0.0.1:5000/gaming_mode")
-            elif "open basic mode" in command:
-                open_mode("Basic Mode", "http://127.0.0.1:5000/basic_mode")
-            elif "open virtual keyboard" in command:
-                open_mode("Virtual Keyboard", "http://127.0.0.1:5000/virtual_keyboard")
-            elif "translate" in command:  # Fixed 'query' to 'command'
+            if "play" in command and "youtube" in command:
+                play_youtube_video(command)
+
+            elif "translate" in command or "language" in command:
                 voice_translate()
+
             elif "time" in command:
-                now = datetime.now().strftime("%I:%M %p")
-                speak(f"The current time is {now}.")
+                speak(datetime.now().strftime("%I:%M %p"))
+
             elif "date" in command:
-                today = datetime.now().strftime("%A, %B %d, %Y")
-                speak(f"Today's date is {today}.")
+                speak(datetime.now().strftime("%A, %B %d, %Y"))
+
             elif "joke" in command:
                 tell_joke()
+
             elif "battery" in command:
                 get_battery_status()
+
             elif "volume" in command:
-                digits = ''.join(filter(str.isdigit, command))  # Extract numbers
+                digits = ''.join(filter(str.isdigit, command))
                 if digits:
                     set_volume(int(digits))
                 else:
-                    speak("Please specify a volume level.")
-            elif "exit" in command or "quit" in command:
+                    speak("Tell volume level")
+
+            elif "exit" in command or "quit" in command or "goodbye" in command:
                 speak("Goodbye!")
                 break
+
             else:
-                speak("Sorry, I didn't understand that command.")
+                search_wikipedia(command)
+
+        time.sleep(1)
+
 
 if __name__ == "__main__":
-    main() 
+    main()
